@@ -5,6 +5,7 @@ from .database import get_db
 from .models import BOM, Item
 from .schemas import ItemCreate, ItemOut
 
+# Item 路由：接收前端请求，调用 SQLAlchemy 读写 items 表，并返回 JSON。
 router = APIRouter(prefix="/api/items", tags=["items"])
 
 

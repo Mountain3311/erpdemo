@@ -3,8 +3,10 @@ from sqlalchemy.orm import Session
 from .database import utcnow
 from .models import BOM, BOMLine, BOMOperation, Item
 
+# 首次启动的演示数据。当前保留旧版多层示例，避免低风险阶段改写用户本地数据库。
 
 def seed_if_empty(db: Session) -> None:
+    # 数据库已有 Item 时立即返回，保证应用重启不会重复插入数据。
     if db.query(Item).count():
         return
 

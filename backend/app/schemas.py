@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+# 本文件定义接口收发的 JSON 结构：路由先用它校验数据，再交给 models/services 处理。
 
 class ItemCreate(BaseModel):
     code: str
@@ -27,6 +28,7 @@ class LineIn(BaseModel):
 
 
 class OperationIn(BaseModel):
+    # 兼容原有 BOM API 的工序输入；低风险阶段不删除此结构。
     sequence: int = 1
     name: str
     hours: float = 0

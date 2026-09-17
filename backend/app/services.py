@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from .models import BOM, BOMLine, BOMOperation, Item
 
+# 业务辅助函数集中在这里。路由调用这些函数完成校验、装配响应和旧版高级 BOM 计算。
+# 低风险阶段不移除函数：tree/cost 等已发布 API 仍依赖它们，删除会破坏 API 稳定性。
 
 def required_qty(line: BOMLine) -> float:
     return round(line.qty * (1 + (line.scrap_pct or 0) / 100.0), 6)
@@ -55,6 +57,7 @@ def would_cycle(db: Session, parent_item_id: int, child_item_id: int, seen: set[
 
 
 def replace_lines(db: Session, bom: BOM, lines: list) -> None:
+    # 用前端提交的新材料行整体替换旧材料行，并校验 Item、数量和循环引用。
     bom.lines.clear()
     db.flush()
     for row in lines:
@@ -77,6 +80,7 @@ def replace_lines(db: Session, bom: BOM, lines: list) -> None:
 
 
 def replace_operations(bom: BOM, operations: list) -> None:
+    # 与 replace_lines 对应，整体替换工序行；仅为兼容原 API 保留。
     bom.operations.clear()
     for row in operations:
         if row.hours < 0 or row.rate_per_hour < 0:
@@ -243,6 +247,7 @@ def bom_costs(db: Session, bom: BOM) -> tuple[float, float, float]:
 
 
 def serialize_summary(db: Session, bom: BOM) -> dict:
+    # 将 ORM BOM 对象转换成接口需要的摘要字典。
     material, operation, total = bom_costs(db, bom)
     return {
         "id": bom.id,

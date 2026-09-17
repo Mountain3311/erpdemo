@@ -18,10 +18,12 @@ from .services import (
     serialize_summary,
 )
 
+# BOM 路由：负责 BOM 的 HTTP 接口；复杂计算仍集中在 services.py，避免路由承担业务细节。
 router = APIRouter(prefix="/api/boms", tags=["boms"])
 
 
 def _detail(db: Session, bom: BOM) -> dict:
+    # 统一组合 BOM 主信息、材料行和工序行，供创建、查询、更新接口复用。
     data = serialize_summary(db, bom)
     data["lines"] = [serialize_line(line) for line in bom.lines]
     data["operations"] = [serialize_op(op) for op in bom.operations]

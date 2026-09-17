@@ -1,751 +1,107 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 
-const TYPE_LABEL = {
-  purchased: "采购件",
-  semi: "半成品",
-  finished: "成品",
-};
+const TYPE_LABEL = { purchased: "原材料", semi: "半成品", finished: "产品" };
 
-function money(n) {
-  return `¥${Number(n || 0).toFixed(2)}`;
-}
-
-function qty(n) {
-  const v = Number(n || 0);
-  return Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+function formatDate(value) {
+  return value ? new Date(value).toLocaleDateString("zh-CN") : "—";
 }
 
 export default function App() {
-  const [page, setPage] = useState("boms");
-  return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
-          <small>Course assignment</small>
-          <h1>Open BOM</h1>
-        </div>
-        <nav className="nav">
-          <button className={page === "boms" ? "active" : ""} onClick={() => setPage("boms")}>
-            物料清单 BOM
-          </button>
-          <button className={page === "items" ? "active" : ""} onClick={() => setPage("items")}>
-            物料主数据
-          </button>
-          <button className={page === "about" ? "active" : ""} onClick={() => setPage("about")}>
-            关于本作业
-          </button>
-        </nav>
-      </aside>
-      <main className="main">
-        {page === "boms" && <BomPage />}
-        {page === "items" && <ItemPage />}
-        {page === "about" && <AboutPage />}
-      </main>
-    </div>
-  );
-}
-
-function AboutPage() {
-  return (
-    <section className="about">
-      <div className="topbar">
-        <div>
-          <h2>关于本作业</h2>
-          <p>这是一份课程作业演示：自研多层 BOM，不是 ERPNext 的分支或再分发。</p>
-        </div>
-      </div>
-      <div className="card panel">
-        <p>
-          演示范围包括物料主数据、多层 BOM、损耗后的需求量、树形展开、叶子物料汇总，以及物料成本 + 工序工时成本。不含工单、库存事务、产能或外协。
-        </p>
-        <p>
-          功能对标公开的制造业 BOM 实践，参考过{" "}
-          <a href="https://frappe.io/erpnext/open-source-manufacturing-erp-software" target="_blank" rel="noreferrer">
-            ERPNext Manufacturing
-          </a>{" "}
-          的产品说明。代码全部原创，采用 MIT 许可。未复制 ERPNext / Frappe 源码，也不使用其商标作为产品名。
-        </p>
-      </div>
-    </section>
-  );
-}
-
-function ItemPage() {
+  const [page, setPage] = useState("dashboard");
   const [items, setItems] = useState([]);
+  const [boms, setBoms] = useState([]);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({
-    code: "",
-    name: "",
-    item_type: "purchased",
-    uom: "pcs",
-    unit_cost: 0,
-    description: "",
-  });
+  const [loading, setLoading] = useState(true);
 
   async function refresh() {
-    setItems(await api.items());
-  }
-
-  useEffect(() => {
-    refresh().catch((e) => setError(e.message));
-  }, []);
-
-  async function onCreate(e) {
-    e.preventDefault();
+    setLoading(true);
     setError("");
     try {
-      await api.createItem({ ...form, unit_cost: Number(form.unit_cost) });
-      setForm({ code: "", name: "", item_type: "purchased", uom: "pcs", unit_cost: 0, description: "" });
-      await refresh();
+      const [itemRows, bomRows] = await Promise.all([api.items(), api.boms()]);
+      setItems(itemRows);
+      setBoms(bomRows);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   }
 
-  return (
-    <>
-      <div className="topbar">
-        <div>
-          <h2>物料主数据</h2>
-          <p>成品和半成品可以挂 BOM；采购件提供单价，供成本汇总使用。</p>
-        </div>
-      </div>
-      {error && <p className="error">{error}</p>}
-      <div className="grid">
-        <form className="card panel" onSubmit={onCreate}>
-          <h3>新增物料</h3>
-          <div className="form-grid" style={{ marginTop: "0.8rem" }}>
-            <label>
-              编码
-              <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required />
-            </label>
-            <label>
-              名称
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-            </label>
-            <label>
-              类型
-              <select value={form.item_type} onChange={(e) => setForm({ ...form, item_type: e.target.value })}>
-                <option value="purchased">采购件</option>
-                <option value="semi">半成品</option>
-                <option value="finished">成品</option>
-              </select>
-            </label>
-            <label>
-              单位
-              <input value={form.uom} onChange={(e) => setForm({ ...form, uom: e.target.value })} />
-            </label>
-            <label>
-              单价
-              <input
-                type="number"
-                step="0.01"
-                value={form.unit_cost}
-                onChange={(e) => setForm({ ...form, unit_cost: e.target.value })}
-              />
-            </label>
-          </div>
-          <label>
-            说明
-            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-          </label>
-          <div className="row" style={{ marginTop: "0.8rem" }}>
-            <button className="btn" type="submit">
-              保存物料
-            </button>
-          </div>
-        </form>
-        <div className="card">
-          <h3>已有物料</h3>
-          <div className="panel" style={{ overflowX: "auto" }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>编码</th>
-                  <th>名称</th>
-                  <th>类型</th>
-                  <th>单价</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="mono">{item.code}</td>
-                    <td>{item.name}</td>
-                    <td>
-                      <span className={`badge ${item.item_type}`}>{TYPE_LABEL[item.item_type]}</span>
-                    </td>
-                    <td className="mono">{money(item.unit_cost)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </>
-  );
+  useEffect(() => { refresh(); }, []);
+  const title = { dashboard: "工作台", items: "Item 管理", boms: "BOM 管理" }[page];
+
+  return <div className="desk">
+    <aside className="sidebar">
+      <div className="brand"><span className="brand-mark">B</span><div><strong>BOM 教学 Demo</strong><small>Manufacturing</small></div></div>
+      <p className="nav-group">制造</p>
+      <nav>
+        <button className={page === "dashboard" ? "active" : ""} onClick={() => setPage("dashboard")}>工作台</button>
+        <button className={page === "items" ? "active" : ""} onClick={() => setPage("items")}>Item 管理</button>
+        <button className={page === "boms" ? "active" : ""} onClick={() => setPage("boms")}>BOM 管理</button>
+      </nav>
+      <div className="sidebar-note">课程演示版<br />仅展示物料与 BOM 核心流程</div>
+    </aside>
+    <main>
+      <header className="topbar"><div><p className="breadcrumb">制造 / {title}</p><h1>{title}</h1></div><button className="button secondary" onClick={refresh} disabled={loading}>{loading ? "正在刷新…" : "刷新数据"}</button></header>
+      {error && <div className="alert">无法读取数据：{error}</div>}
+      {page === "dashboard" && <Dashboard items={items} boms={boms} loading={loading} setPage={setPage} />}
+      {page === "items" && <ItemsPage items={items} refresh={refresh} />}
+      {page === "boms" && <BomsPage items={items} boms={boms} refresh={refresh} />}
+    </main>
+  </div>;
 }
 
-function BomPage() {
-  const [boms, setBoms] = useState([]);
-  const [items, setItems] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
-  const [detail, setDetail] = useState(null);
-  const [tree, setTree] = useState(null);
-  const [exploded, setExploded] = useState([]);
-  const [cost, setCost] = useState(null);
-  const [tab, setTab] = useState("lines");
-  const [error, setError] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [newItemId, setNewItemId] = useState("");
-
-  async function refreshList() {
-    const [bomRows, itemRows] = await Promise.all([api.boms(), api.items()]);
-    setBoms(bomRows);
-    setItems(itemRows);
-    return bomRows;
-  }
-
-  async function openBom(id) {
-    const [d, t, e, c] = await Promise.all([api.bom(id), api.tree(id), api.exploded(id), api.cost(id)]);
-    setSelectedId(id);
-    setDetail(d);
-    setTree(t);
-    setExploded(e);
-    setCost(c);
-  }
-
-  useEffect(() => {
-    refreshList()
-      .then((rows) => {
-        const first = rows.find((b) => b.item_code === "CM-100") || rows[0];
-        if (first) return openBom(first.id);
-      })
-      .catch((e) => setError(e.message));
-  }, []);
-
-  const makeable = useMemo(
-    () => items.filter((i) => i.item_type !== "purchased"),
-    [items]
-  );
-
-  async function wrap(fn) {
-    setError("");
-    try {
-      await fn();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  return (
-    <>
-      <div className="topbar">
-        <div>
-          <h2>多层物料清单</h2>
-          <p>打开种子数据里的 CM-100，可看到半成品展开成采购件，并汇总物料与工序成本。</p>
-        </div>
-        <div className="row">
-          <select value={newItemId} onChange={(e) => setNewItemId(e.target.value)}>
-            <option value="">选择成品 / 半成品</option>
-            {makeable.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.code} {item.name}
-              </option>
-            ))}
-          </select>
-          <button
-            className="btn"
-            disabled={!newItemId || creating}
-            onClick={() =>
-              wrap(async () => {
-                setCreating(true);
-                try {
-                  const created = await api.createBom({
-                    item_id: Number(newItemId),
-                    output_qty: 1,
-                    notes: "",
-                    lines: [],
-                    operations: [],
-                  });
-                  await refreshList();
-                  await openBom(created.id);
-                  setTab("lines");
-                } finally {
-                  setCreating(false);
-                }
-              })
-            }
-          >
-            新建草稿
-          </button>
-        </div>
-      </div>
-      {error && <p className="error">{error}</p>}
-      <div className="grid">
-        <div className="card">
-          <h3>BOM 列表</h3>
-          <div className="list">
-            {boms.map((bom) => (
-              <button
-                key={bom.id}
-                className={bom.id === selectedId ? "active" : ""}
-                onClick={() => wrap(() => openBom(bom.id))}
-              >
-                <div>
-                  <span className="mono">{bom.item_code}</span> · v{bom.version}{" "}
-                  <span className={`badge ${bom.status}`}>{bom.status === "submitted" ? "已提交" : "草稿"}</span>
-                </div>
-                <div className="meta">
-                  {bom.item_name} · {money(bom.total_cost)}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-        {detail && (
-          <BomDetail
-            detail={detail}
-            items={items}
-            tab={tab}
-            setTab={setTab}
-            tree={tree}
-            exploded={exploded}
-            cost={cost}
-            onSave={(payload) =>
-              wrap(async () => {
-                await api.updateBom(detail.id, payload);
-                await refreshList();
-                await openBom(detail.id);
-              })
-            }
-            onSubmit={() =>
-              wrap(async () => {
-                await api.submitBom(detail.id);
-                await refreshList();
-                await openBom(detail.id);
-              })
-            }
-            onVersion={() =>
-              wrap(async () => {
-                const next = await api.newVersion(detail.id);
-                await refreshList();
-                await openBom(next.id);
-                setTab("lines");
-              })
-            }
-          />
-        )}
-      </div>
-    </>
-  );
+function Dashboard({ items, boms, loading, setPage }) {
+  const productCount = items.filter((item) => item.item_type === "finished").length;
+  return <section className="page-content">
+    <p className="page-intro">从 Item 开始，创建 BOM，再为 BOM 添加材料。这里展示的是一层 BOM 的基础教学流程。</p>
+    <div className="metric-grid"><Metric label="Item 总数" value={items.length} /><Metric label="产品数量" value={productCount} /><Metric label="BOM 数量" value={boms.length} /></div>
+    <div className="panel quick-start"><div><h2>建议演示顺序</h2><p>先建立产品与原材料，再创建一张 BOM，最后在详情中维护材料清单。</p></div><div className="button-row"><button className="button secondary" onClick={() => setPage("items")}>管理 Item</button><button className="button" onClick={() => setPage("boms")}>管理 BOM</button></div></div>
+    <section className="panel table-panel"><div className="panel-heading"><h2>最近 BOM</h2><span>{loading ? "加载中" : `${boms.length} 条记录`}</span></div><BomTable boms={boms.slice(0, 5)} /></section>
+  </section>;
 }
+function Metric({ label, value }) { return <div className="metric"><span>{label}</span><strong>{value}</strong></div>; }
 
-function BomDetail({ detail, items, tab, setTab, tree, exploded, cost, onSave, onSubmit, onVersion }) {
-  const readOnly = detail.status !== "draft";
-  const [outputQty, setOutputQty] = useState(detail.output_qty);
-  const [notes, setNotes] = useState(detail.notes);
-  const [lines, setLines] = useState(detail.lines);
-  const [operations, setOperations] = useState(detail.operations);
-
-  useEffect(() => {
-    setOutputQty(detail.output_qty);
-    setNotes(detail.notes);
-    setLines(detail.lines);
-    setOperations(detail.operations);
-  }, [detail]);
-
-  function addLine() {
-    const first = items[0];
-    if (!first) return;
-    setLines([
-      ...lines,
-      { item_id: first.id, qty: 1, uom: first.uom, scrap_pct: 0, explode: true },
-    ]);
+function ItemsPage({ items, refresh }) {
+  const [form, setForm] = useState({ code: "", name: "", item_type: "purchased", uom: "pcs", unit_cost: "0", description: "" });
+  const [message, setMessage] = useState(""); const [error, setError] = useState("");
+  async function createItem(event) {
+    event.preventDefault(); setError(""); setMessage("");
+    try { await api.createItem({ ...form, unit_cost: Number(form.unit_cost) }); setForm({ code: "", name: "", item_type: "purchased", uom: "pcs", unit_cost: "0", description: "" }); setMessage("Item 已保存。"); await refresh(); } catch (err) { setError(err.message); }
   }
-
-  function addOp() {
-    setOperations([
-      ...operations,
-      { sequence: operations.length + 1, name: "", hours: 0.1, rate_per_hour: 80 },
-    ]);
-  }
-
-  return (
-    <div className="card">
-      <div className="panel">
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <div>
-            <h3>
-              {detail.item_name}{" "}
-              <span className="mono">
-                {detail.item_code} / v{detail.version}
-              </span>
-            </h3>
-            <div className="meta" style={{ marginTop: "0.35rem" }}>
-              <span className={`badge ${detail.status}`}>{readOnly ? "已提交 · 只读" : "草稿 · 可编辑"}</span>
-            </div>
-          </div>
-          <div className="row">
-            {readOnly ? (
-              <button className="btn secondary" onClick={onVersion}>
-                复制为新版本
-              </button>
-            ) : (
-              <>
-                <button
-                  className="btn secondary"
-                  onClick={() =>
-                    onSave({
-                      output_qty: Number(outputQty),
-                      notes,
-                      lines: lines.map((line) => ({
-                        item_id: Number(line.item_id),
-                        qty: Number(line.qty),
-                        uom: line.uom,
-                        scrap_pct: Number(line.scrap_pct || 0),
-                        explode: Boolean(line.explode),
-                      })),
-                      operations: operations.map((op, i) => ({
-                        sequence: Number(op.sequence || i + 1),
-                        name: op.name,
-                        hours: Number(op.hours),
-                        rate_per_hour: Number(op.rate_per_hour),
-                      })),
-                    })
-                  }
-                >
-                  保存草稿
-                </button>
-                <button className="btn" onClick={onSubmit}>
-                  提交
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-        <div className="stats">
-          <div className="stat">
-            <span>物料成本</span>
-            <strong>{money(detail.material_cost)}</strong>
-          </div>
-          <div className="stat">
-            <span>工序成本</span>
-            <strong>{money(detail.operation_cost)}</strong>
-          </div>
-          <div className="stat">
-            <span>单位成本</span>
-            <strong>{money(detail.total_cost / (detail.output_qty || 1))}</strong>
-          </div>
-        </div>
-        <div className="form-grid">
-          <label>
-            产出数量
-            <input
-              type="number"
-              step="0.01"
-              disabled={readOnly}
-              value={outputQty}
-              onChange={(e) => setOutputQty(e.target.value)}
-            />
-          </label>
-          <label>
-            备注
-            <input disabled={readOnly} value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </label>
-        </div>
-      </div>
-      <div className="tabs">
-        {[
-          ["lines", "物料行"],
-          ["ops", "工序"],
-          ["tree", "多层展开"],
-          ["cost", "成本"],
-        ].map(([id, label]) => (
-          <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="panel">
-        {tab === "lines" && (
-          <>
-            <table>
-              <thead>
-                <tr>
-                  <th>物料</th>
-                  <th>用量</th>
-                  <th>损耗 %</th>
-                  <th>展开</th>
-                  <th>需求量</th>
-                  {!readOnly && <th />}
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((line, index) => (
-                  <tr key={index}>
-                    <td>
-                      {readOnly ? (
-                        <span>
-                          <span className="mono">{line.item_code}</span> {line.item_name}
-                        </span>
-                      ) : (
-                        <select
-                          value={line.item_id}
-                          onChange={(e) => {
-                            const next = [...lines];
-                            next[index] = { ...next[index], item_id: Number(e.target.value) };
-                            setLines(next);
-                          }}
-                        >
-                          {items.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.code} {item.name}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        step="0.01"
-                        disabled={readOnly}
-                        value={line.qty}
-                        onChange={(e) => {
-                          const next = [...lines];
-                          next[index] = { ...next[index], qty: e.target.value };
-                          setLines(next);
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        step="0.1"
-                        disabled={readOnly}
-                        value={line.scrap_pct}
-                        onChange={(e) => {
-                          const next = [...lines];
-                          next[index] = { ...next[index], scrap_pct: e.target.value };
-                          setLines(next);
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="checkbox"
-                        disabled={readOnly}
-                        checked={Boolean(line.explode)}
-                        onChange={(e) => {
-                          const next = [...lines];
-                          next[index] = { ...next[index], explode: e.target.checked };
-                          setLines(next);
-                        }}
-                      />
-                    </td>
-                    <td className="mono">{qty(line.required_qty ?? line.qty * (1 + (line.scrap_pct || 0) / 100))}</td>
-                    {!readOnly && (
-                      <td>
-                        <button
-                          className="btn ghost"
-                          type="button"
-                          onClick={() => setLines(lines.filter((_, i) => i !== index))}
-                        >
-                          删除
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!readOnly && (
-              <button className="btn secondary" style={{ marginTop: "0.8rem" }} onClick={addLine}>
-                添加物料行
-              </button>
-            )}
-          </>
-        )}
-        {tab === "ops" && (
-          <>
-            <table>
-              <thead>
-                <tr>
-                  <th>顺序</th>
-                  <th>工序</th>
-                  <th>工时 h</th>
-                  <th>费率 / h</th>
-                  <th>成本</th>
-                  {!readOnly && <th />}
-                </tr>
-              </thead>
-              <tbody>
-                {operations.map((op, index) => (
-                  <tr key={index}>
-                    <td>
-                      <input
-                        type="number"
-                        disabled={readOnly}
-                        value={op.sequence}
-                        onChange={(e) => {
-                          const next = [...operations];
-                          next[index] = { ...next[index], sequence: e.target.value };
-                          setOperations(next);
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        disabled={readOnly}
-                        value={op.name}
-                        onChange={(e) => {
-                          const next = [...operations];
-                          next[index] = { ...next[index], name: e.target.value };
-                          setOperations(next);
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        step="0.01"
-                        disabled={readOnly}
-                        value={op.hours}
-                        onChange={(e) => {
-                          const next = [...operations];
-                          next[index] = { ...next[index], hours: e.target.value };
-                          setOperations(next);
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        step="0.01"
-                        disabled={readOnly}
-                        value={op.rate_per_hour}
-                        onChange={(e) => {
-                          const next = [...operations];
-                          next[index] = { ...next[index], rate_per_hour: e.target.value };
-                          setOperations(next);
-                        }}
-                      />
-                    </td>
-                    <td className="mono">{money((op.hours || 0) * (op.rate_per_hour || 0))}</td>
-                    {!readOnly && (
-                      <td>
-                        <button
-                          className="btn ghost"
-                          type="button"
-                          onClick={() => setOperations(operations.filter((_, i) => i !== index))}
-                        >
-                          删除
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!readOnly && (
-              <button className="btn secondary" style={{ marginTop: "0.8rem" }} onClick={addOp}>
-                添加工序
-              </button>
-            )}
-          </>
-        )}
-        {tab === "tree" && tree && <Tree node={tree} depth={0} />}
-        {tab === "cost" && cost && (
-          <>
-            <div className="stats">
-              <div className="stat">
-                <span>展开物料</span>
-                <strong>{money(cost.material_cost)}</strong>
-              </div>
-              <div className="stat">
-                <span>全部工序</span>
-                <strong>{money(cost.operation_cost)}</strong>
-              </div>
-              <div className="stat">
-                <span>合计 / 件</span>
-                <strong>{money(cost.unit_cost)}</strong>
-              </div>
-            </div>
-            <h3 className="section-title">叶子物料汇总</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>物料</th>
-                  <th>数量</th>
-                  <th>单价</th>
-                  <th>金额</th>
-                </tr>
-              </thead>
-              <tbody>
-                {exploded.map((row) => (
-                  <tr key={row.item_id}>
-                    <td>
-                      <span className="mono">{row.item_code}</span> {row.item_name}
-                    </td>
-                    <td className="mono">
-                      {qty(row.qty)} {row.uom}
-                    </td>
-                    <td className="mono">{money(row.unit_cost)}</td>
-                    <td className="mono">{money(row.extended_cost)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <h3 className="section-title" style={{ marginTop: "1rem" }}>
-              工序（含半成品）
-            </h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>工序</th>
-                  <th>工时</th>
-                  <th>费率</th>
-                  <th>成本</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cost.operations.map((op, i) => (
-                  <tr key={i}>
-                    <td>{op.name}</td>
-                    <td className="mono">{qty(op.hours)}</td>
-                    <td className="mono">{money(op.rate_per_hour)}</td>
-                    <td className="mono">{money(op.cost)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        )}
-      </div>
+  return <section className="page-content">
+    <div className="section-toolbar"><p>Item 是 BOM 中可被选择的产品或材料。当前稳定接口支持创建与查看。</p><span className="record-count">{items.length} 条记录</span></div>
+    {message && <div className="notice">{message}</div>}{error && <div className="alert">保存失败：{error}</div>}
+    <div className="two-column">
+      <section className="panel form-panel"><div className="panel-heading"><h2>新建 Item</h2></div><form onSubmit={createItem}>
+        <label>编码<input required value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} /></label><label>名称<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+        <div className="form-grid"><label>类型<select value={form.item_type} onChange={(e) => setForm({ ...form, item_type: e.target.value })}><option value="purchased">原材料</option><option value="finished">产品</option><option value="semi">半成品（兼容旧数据）</option></select></label><label>单位<input value={form.uom} onChange={(e) => setForm({ ...form, uom: e.target.value })} /></label></div>
+        <label>单价<input type="number" min="0" step="0.01" value={form.unit_cost} onChange={(e) => setForm({ ...form, unit_cost: e.target.value })} /></label><label>说明（可选）<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label><button className="button" type="submit">保存 Item</button>
+      </form></section>
+      <section className="panel table-panel"><div className="panel-heading"><h2>Item 列表</h2></div><div className="table-scroll"><ItemTable items={items} /></div></section>
     </div>
-  );
+  </section>;
 }
+function ItemTable({ items }) { return <table><thead><tr><th>编码</th><th>名称</th><th>类型</th><th>单位</th><th>单价</th></tr></thead><tbody>{items.map((item) => <tr key={item.id}><td className="code">{item.code}</td><td>{item.name}</td><td><span className="tag">{TYPE_LABEL[item.item_type] || item.item_type}</span></td><td>{item.uom}</td><td>{Number(item.unit_cost || 0).toFixed(2)}</td></tr>)}{!items.length && <EmptyRow colSpan={5} />}</tbody></table>; }
 
-function Tree({ node, depth }) {
-  return (
-    <div className="tree">
-      <div className="tree-row" style={{ paddingLeft: `${depth * 18}px` }}>
-        <div className="name">
-          <span className="mono">{node.item_code}</span>
-          <span>{node.item_name}</span>
-          {node.bom_version ? <span className="badge submitted">BOM v{node.bom_version}</span> : null}
-        </div>
-        <div className="mono">
-          {qty(node.qty)} {node.uom}
-        </div>
-        <div className="mono">{money(node.extended_cost)}</div>
-      </div>
-      {(node.children || []).map((child, i) => (
-        <Tree key={`${child.item_id}-${i}`} node={child} depth={depth + 1} />
-      ))}
-    </div>
-  );
+function BomsPage({ items, boms, refresh }) {
+  const [selectedId, setSelectedId] = useState(null); const [detail, setDetail] = useState(null); const [creating, setCreating] = useState(false); const [error, setError] = useState("");
+  const makeable = useMemo(() => items.filter((item) => item.item_type !== "purchased"), [items]);
+  async function openBom(id) { try { setError(""); setSelectedId(id); setDetail(await api.bom(id)); } catch (err) { setError(err.message); } }
+  async function createBom() { if (!makeable[0]) return; try { setCreating(true); const created = await api.createBom({ item_id: makeable[0].id, output_qty: 1, notes: "", lines: [], operations: [] }); await refresh(); await openBom(created.id); } catch (err) { setError(err.message); } finally { setCreating(false); } }
+  return <section className="page-content"><div className="section-toolbar"><p>BOM 定义一个产品由哪些材料组成。当前页面隐藏成本、版本与多层展开等高级功能。</p><button className="button" onClick={createBom} disabled={!makeable.length || creating}>{creating ? "正在创建…" : "新建 BOM"}</button></div>{error && <div className="alert">操作失败：{error}</div>}
+    <div className="bom-layout"><section className="panel table-panel"><div className="panel-heading"><h2>BOM 列表</h2><span>{boms.length} 条记录</span></div><div className="table-scroll"><BomTable boms={boms} selectedId={selectedId} onSelect={openBom} /></div></section><section className="panel detail-panel">{detail ? <SimpleBomDetail detail={detail} items={items} refresh={refresh} reload={() => openBom(detail.id)} /> : <div className="empty-state"><h2>选择一张 BOM</h2><p>在左侧列表中打开 BOM，即可查看或编辑材料清单。</p></div>}</section></div>
+  </section>;
 }
+function BomTable({ boms, selectedId, onSelect }) { return <table><thead><tr><th>BOM 编号</th><th>产品</th><th>创建时间</th><th>操作</th></tr></thead><tbody>{boms.map((bom) => <tr key={bom.id} className={bom.id === selectedId ? "selected" : ""}><td className="code">BOM-{bom.id}</td><td>{bom.item_name}</td><td>{formatDate(bom.created_at)}</td><td>{onSelect ? <button className="table-action" onClick={() => onSelect(bom.id)}>查看</button> : "—"}</td></tr>)}{!boms.length && <EmptyRow colSpan={4} />}</tbody></table>; }
+
+function SimpleBomDetail({ detail, items, refresh, reload }) {
+  const [lines, setLines] = useState(detail.lines); const [notes, setNotes] = useState(detail.notes || ""); const [message, setMessage] = useState(""); const [error, setError] = useState("");
+  const readOnly = detail.status !== "draft"; const materials = items.filter((item) => item.item_type === "purchased");
+  useEffect(() => { setLines(detail.lines); setNotes(detail.notes || ""); }, [detail]);
+  function addLine() { if (materials[0]) setLines([...lines, { item_id: materials[0].id, qty: 1, uom: materials[0].uom, scrap_pct: 0, explode: false }]); }
+  async function save() { try { setError(""); setMessage(""); await api.updateBom(detail.id, { notes, lines: lines.map((line) => ({ item_id: Number(line.item_id), qty: Number(line.qty), uom: line.uom, scrap_pct: 0, explode: false })) }); setMessage("BOM 材料清单已保存。"); await refresh(); await reload(); } catch (err) { setError(err.message); } }
+  return <><div className="panel-heading detail-heading"><div><p className="eyebrow">BOM-{detail.id}</p><h2>{detail.item_name}</h2><span className="tag">{readOnly ? "已提交（只读）" : "草稿"}</span></div>{!readOnly && <button className="button" onClick={save}>保存</button>}</div><p className="detail-description">产品：<strong>{detail.item_name}</strong>。材料清单中的每一行都引用一个原材料 Item。</p>{message && <div className="notice">{message}</div>}{error && <div className="alert">保存失败：{error}</div>}<label className="notes-field">备注<input disabled={readOnly} value={notes} onChange={(e) => setNotes(e.target.value)} /></label><h3>材料清单</h3><div className="table-scroll"><table><thead><tr><th>材料</th><th>数量</th><th>单位</th>{!readOnly && <th>操作</th>}</tr></thead><tbody>{lines.map((line, index) => <tr key={`${line.id || "new"}-${index}`}><td>{readOnly ? `${line.item_code} ${line.item_name}` : <select value={line.item_id} onChange={(e) => { const next = [...lines]; const item = items.find((row) => row.id === Number(e.target.value)); next[index] = { ...next[index], item_id: Number(e.target.value), uom: item?.uom || line.uom }; setLines(next); }}>{materials.map((item) => <option key={item.id} value={item.id}>{item.code} {item.name}</option>)}</select>}</td><td><input disabled={readOnly} type="number" min="0.001" step="0.001" value={line.qty} onChange={(e) => { const next = [...lines]; next[index] = { ...next[index], qty: e.target.value }; setLines(next); }} /></td><td>{line.uom}</td>{!readOnly && <td><button className="table-action danger" onClick={() => setLines(lines.filter((_, i) => i !== index))}>移除</button></td>}</tr>)}{!lines.length && <EmptyRow colSpan={readOnly ? 3 : 4} text="尚未添加材料" />}</tbody></table></div>{!readOnly && <button className="button secondary add-line" onClick={addLine} disabled={!materials.length}>添加材料</button>}</>;
+}
+function EmptyRow({ colSpan, text = "暂无数据" }) { return <tr><td className="empty-cell" colSpan={colSpan}>{text}</td></tr>; }

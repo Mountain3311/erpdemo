@@ -6,6 +6,7 @@ from .routers_boms import router as boms_router
 from .routers_items import router as items_router
 from .seed import seed_if_empty
 
+# 程序入口：创建数据表、配置跨域、注册 Item/BOM 路由，并在首次启动时写入示例数据。
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -26,6 +27,7 @@ app.include_router(boms_router)
 
 @app.on_event("startup")
 def startup():
+    # 种子数据只在 items 表为空时写入，不会覆盖用户已有记录。
     db = SessionLocal()
     try:
         seed_if_empty(db)

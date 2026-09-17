@@ -5,8 +5,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base, utcnow
 
+# 本文件定义 SQLite 表和表之间的关系；SQLAlchemy 会据此把 Python 对象保存为数据行。
 
 class Item(Base):
+    # 物料主数据。现阶段保留旧字段，避免影响已存在的 SQLite 数据库和 API。
     __tablename__ = "items"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -21,6 +23,7 @@ class Item(Base):
 
 
 class BOM(Base):
+    # 一张 BOM 属于一个产品 Item，并包含多条材料行和（旧版保留的）工序行。
     __tablename__ = "boms"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -41,6 +44,7 @@ class BOM(Base):
 
 
 class BOMLine(Base):
+    # BOM 的一条材料记录，通过 item_id 指向被使用的 Item。
     __tablename__ = "bom_lines"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -56,6 +60,7 @@ class BOMLine(Base):
 
 
 class BOMOperation(Base):
+    # 旧版工序表；前端教学界面暂不展示，保留以保证旧数据库与 API 兼容。
     __tablename__ = "bom_operations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
