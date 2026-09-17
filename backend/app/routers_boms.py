@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from .database import get_db
-from .models import BOM, BOMLine, BOMOperation
+from .models import BOM, BOMLine, BOMOperation,Item
 from .schemas import BOMCreate, BOMUpdate
 from .services import (
     assert_draft,
