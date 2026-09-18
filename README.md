@@ -51,31 +51,39 @@ data/bom_demo.db       SQLite 数据库文件
 
 当前数据库与后端仍兼容早期版本的多层 BOM、版本、工序和成本接口；教学界面已隐藏这些高级入口，避免干扰基础课程演示。后续如要彻底删除这些能力，应同步迁移 SQLite 数据库和 API，而不应直接删字段。
 
-## 本地运行
+## 一键启动 Demo
 
-需要 Python 3.11+ 和 Node.js 18+。
+推荐方式：双击根目录中的 `start_demo.bat`。
 
-**终端 1：启动后端**
+脚本会自动完成：
+
+1. 启动 FastAPI 后端。
+2. 启动 React 前端。
+3. 打开 Demo 页面。
+
+需要 Python 3.11+、Node.js 18+，并已完成项目依赖安装。
+
+仍可使用以下手动启动方式。
+
+**后端：**
 
 ```powershell
 cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn app.main:app --reload --app-dir .
+uvicorn app.main:app --reload
 ```
 
-接口文档：<http://127.0.0.1:8000/docs>
-
-**终端 2：启动前端**
+**前端：**
 
 ```powershell
 cd frontend
-npm install
 npm run dev
 ```
 
-浏览器打开 <http://localhost:5173>。
+前端：<http://localhost:5173>
+
+后端：<http://127.0.0.1:8000>
+
+API 文档：<http://127.0.0.1:8000/docs>
 
 ## SQLite 数据库
 
