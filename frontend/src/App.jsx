@@ -11,6 +11,7 @@ export default function App() {
   const [page, setPage] = useState("dashboard");
   const [items, setItems] = useState([]);
   const [boms, setBoms] = useState([]);
+  const [selectedBomId, setSelectedBomId] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -29,7 +30,11 @@ export default function App() {
   }
 
   useEffect(() => { refresh(); }, []);
-  const title = { dashboard: "工作台", items: "Item 管理", boms: "BOM 管理" }[page];
+  const title = { dashboard: "工作台", items: "Item 管理", boms: "BOM 管理", "bom-detail": "BOM 详情", "bom-new": "新建 BOM" }[page];
+  const openBomDetail = (id) => {
+    setSelectedBomId(id);
+    setPage("bom-detail");
+  };
 
   return <div className="desk">
     <aside className="sidebar">
@@ -38,27 +43,29 @@ export default function App() {
       <nav>
         <button className={page === "dashboard" ? "active" : ""} onClick={() => setPage("dashboard")}>工作台</button>
         <button className={page === "items" ? "active" : ""} onClick={() => setPage("items")}>Item 管理</button>
-        <button className={page === "boms" ? "active" : ""} onClick={() => setPage("boms")}>BOM 管理</button>
+        <button className={page === "boms" || page === "bom-detail" || page === "bom-new" ? "active" : ""} onClick={() => setPage("boms")}>BOM 管理</button>
       </nav>
       <div className="sidebar-note">课程演示版<br />仅展示物料与 BOM 核心流程</div>
     </aside>
     <main>
       <header className="topbar"><div><p className="breadcrumb">制造 / {title}</p><h1>{title}</h1></div><button className="button secondary" onClick={refresh} disabled={loading}>{loading ? "正在刷新…" : "刷新数据"}</button></header>
       {error && <div className="alert">无法读取数据：{error}</div>}
-      {page === "dashboard" && <Dashboard items={items} boms={boms} loading={loading} setPage={setPage} />}
+      {page === "dashboard" && <Dashboard items={items} boms={boms} loading={loading} setPage={setPage} openBomDetail={openBomDetail} />}
       {page === "items" && <ItemsPage items={items} refresh={refresh} />}
-      {page === "boms" && <BomsPage items={items} boms={boms} refresh={refresh} />}
+      {page === "boms" && <BomsPage boms={boms} openBomDetail={openBomDetail} onNew={() => setPage("bom-new")} />}
+      {page === "bom-detail" && <BomDetailPage bomId={selectedBomId} onBack={() => setPage("boms")} />}
+      {page === "bom-new" && <NewBomPage items={items} refresh={refresh} onCancel={() => setPage("boms")} onSaved={() => setPage("boms")} />}
     </main>
   </div>;
 }
 
-function Dashboard({ items, boms, loading, setPage }) {
+function Dashboard({ items, boms, loading, setPage, openBomDetail }) {
   const productCount = items.filter((item) => item.item_type === "finished").length;
   return <section className="page-content">
     <p className="page-intro">从 Item 开始，创建 BOM，再为 BOM 添加材料。这里展示的是一层 BOM 的基础教学流程。</p>
     <div className="metric-grid"><Metric label="Item 总数" value={items.length} /><Metric label="产品数量" value={productCount} /><Metric label="BOM 数量" value={boms.length} /></div>
-    <div className="panel quick-start"><div><h2>建议演示顺序</h2><p>先建立产品与原材料，再创建一张 BOM，最后在详情中维护材料清单。</p></div><div className="button-row"><button className="button secondary" onClick={() => setPage("items")}>管理 Item</button><button className="button" onClick={() => setPage("boms")}>管理 BOM</button></div></div>
-    <section className="panel table-panel"><div className="panel-heading"><h2>最近 BOM</h2><span>{loading ? "加载中" : `${boms.length} 条记录`}</span></div><BomTable boms={boms.slice(0, 5)} /></section>
+    <div className="panel quick-start"><div><h2>建议演示顺序</h2><p>先建立产品与原材料，再创建一张 BOM，最后在详情中查看材料清单。</p></div><div className="button-row"><button className="button secondary" onClick={() => setPage("items")}>管理 Item</button><button className="button" onClick={() => setPage("boms")}>管理 BOM</button></div></div>
+    <section className="panel table-panel"><div className="panel-heading"><h2>最近 BOM</h2><span>{loading ? "加载中" : `${boms.length} 条记录`}</span></div><BomTable boms={boms.slice(0, 5)} onOpen={openBomDetail} /></section>
   </section>;
 }
 function Metric({ label, value }) { return <div className="metric"><span>{label}</span><strong>{value}</strong></div>; }
@@ -85,23 +92,68 @@ function ItemsPage({ items, refresh }) {
 }
 function ItemTable({ items }) { return <table><thead><tr><th>编码</th><th>名称</th><th>类型</th><th>单位</th><th>单价</th></tr></thead><tbody>{items.map((item) => <tr key={item.id}><td className="code">{item.code}</td><td>{item.name}</td><td><span className="tag">{TYPE_LABEL[item.item_type] || item.item_type}</span></td><td>{item.uom}</td><td>{Number(item.unit_cost || 0).toFixed(2)}</td></tr>)}{!items.length && <EmptyRow colSpan={5} />}</tbody></table>; }
 
-function BomsPage({ items, boms, refresh }) {
-  const [selectedId, setSelectedId] = useState(null); const [detail, setDetail] = useState(null); const [creating, setCreating] = useState(false); const [error, setError] = useState("");
-  const makeable = useMemo(() => items.filter((item) => item.item_type !== "purchased"), [items]);
-  async function openBom(id) { try { setError(""); setSelectedId(id); setDetail(await api.bom(id)); } catch (err) { setError(err.message); } }
-  async function createBom() { if (!makeable[0]) return; try { setCreating(true); const created = await api.createBom({ item_id: makeable[0].id, output_qty: 1, notes: "", lines: [], operations: [] }); await refresh(); await openBom(created.id); } catch (err) { setError(err.message); } finally { setCreating(false); } }
-  return <section className="page-content"><div className="section-toolbar"><p>BOM 定义一个产品由哪些材料组成。当前页面隐藏成本、版本与多层展开等高级功能。</p><button className="button" onClick={createBom} disabled={!makeable.length || creating}>{creating ? "正在创建…" : "新建 BOM"}</button></div>{error && <div className="alert">操作失败：{error}</div>}
-    <div className="bom-layout"><section className="panel table-panel"><div className="panel-heading"><h2>BOM 列表</h2><span>{boms.length} 条记录</span></div><div className="table-scroll"><BomTable boms={boms} selectedId={selectedId} onSelect={openBom} /></div></section><section className="panel detail-panel">{detail ? <SimpleBomDetail detail={detail} items={items} refresh={refresh} reload={() => openBom(detail.id)} /> : <div className="empty-state"><h2>选择一张 BOM</h2><p>在左侧列表中打开 BOM，即可查看或编辑材料清单。</p></div>}</section></div>
+function BomsPage({ boms, openBomDetail, onNew }) {
+  return <section className="page-content"><div className="section-toolbar"><p>BOM 定义一个产品由哪些材料组成。点击任意 BOM 可查看完整基础信息和材料清单。</p><button className="button" onClick={onNew}>新建 BOM</button></div>
+    <section className="panel table-panel"><div className="panel-heading"><h2>BOM 列表</h2><span>{boms.length} 条记录</span></div><div className="table-scroll"><BomTable boms={boms} onOpen={openBomDetail} /></div></section>
   </section>;
 }
-function BomTable({ boms, selectedId, onSelect }) { return <table><thead><tr><th>BOM 编号</th><th>产品</th><th>创建时间</th><th>操作</th></tr></thead><tbody>{boms.map((bom) => <tr key={bom.id} className={bom.id === selectedId ? "selected" : ""}><td className="code">BOM-{bom.id}</td><td>{bom.item_name}</td><td>{formatDate(bom.created_at)}</td><td>{onSelect ? <button className="table-action" onClick={() => onSelect(bom.id)}>查看</button> : "—"}</td></tr>)}{!boms.length && <EmptyRow colSpan={4} />}</tbody></table>; }
+function BomTable({ boms, onOpen }) { return <table><thead><tr><th>BOM 编号</th><th>BOM 名称</th><th>产品</th><th>创建时间</th><th>操作</th></tr></thead><tbody>{boms.map((bom) => <tr key={bom.id} className={onOpen ? "clickable-row" : ""} onClick={() => onOpen?.(bom.id)}><td className="code">{bom.bom_code}</td><td>{bom.name}</td><td>{bom.item_name}</td><td>{formatDate(bom.created_at)}</td><td>{onOpen ? <button className="table-action" onClick={(event) => { event.stopPropagation(); onOpen(bom.id); }}>查看</button> : "—"}</td></tr>)}{!boms.length && <EmptyRow colSpan={5} />}</tbody></table>; }
 
-function SimpleBomDetail({ detail, items, refresh, reload }) {
-  const [lines, setLines] = useState(detail.lines); const [notes, setNotes] = useState(detail.notes || ""); const [message, setMessage] = useState(""); const [error, setError] = useState("");
-  const readOnly = detail.status !== "draft"; const materials = items.filter((item) => item.item_type === "purchased");
-  useEffect(() => { setLines(detail.lines); setNotes(detail.notes || ""); }, [detail]);
-  function addLine() { if (materials[0]) setLines([...lines, { item_id: materials[0].id, qty: 1, uom: materials[0].uom, scrap_pct: 0, explode: false }]); }
-  async function save() { try { setError(""); setMessage(""); await api.updateBom(detail.id, { notes, lines: lines.map((line) => ({ item_id: Number(line.item_id), qty: Number(line.qty), uom: line.uom, scrap_pct: 0, explode: false })) }); setMessage("BOM 材料清单已保存。"); await refresh(); await reload(); } catch (err) { setError(err.message); } }
-  return <><div className="panel-heading detail-heading"><div><p className="eyebrow">BOM-{detail.id}</p><h2>{detail.item_name}</h2><span className="tag">{readOnly ? "已提交（只读）" : "草稿"}</span></div>{!readOnly && <button className="button" onClick={save}>保存</button>}</div><p className="detail-description">产品：<strong>{detail.item_name}</strong>。材料清单中的每一行都引用一个原材料 Item。</p>{message && <div className="notice">{message}</div>}{error && <div className="alert">保存失败：{error}</div>}<label className="notes-field">备注<input disabled={readOnly} value={notes} onChange={(e) => setNotes(e.target.value)} /></label><h3>材料清单</h3><div className="table-scroll"><table><thead><tr><th>材料</th><th>数量</th><th>单位</th>{!readOnly && <th>操作</th>}</tr></thead><tbody>{lines.map((line, index) => <tr key={`${line.id || "new"}-${index}`}><td>{readOnly ? `${line.item_code} ${line.item_name}` : <select value={line.item_id} onChange={(e) => { const next = [...lines]; const item = items.find((row) => row.id === Number(e.target.value)); next[index] = { ...next[index], item_id: Number(e.target.value), uom: item?.uom || line.uom }; setLines(next); }}>{materials.map((item) => <option key={item.id} value={item.id}>{item.code} {item.name}</option>)}</select>}</td><td><input disabled={readOnly} type="number" min="0.001" step="0.001" value={line.qty} onChange={(e) => { const next = [...lines]; next[index] = { ...next[index], qty: e.target.value }; setLines(next); }} /></td><td>{line.uom}</td>{!readOnly && <td><button className="table-action danger" onClick={() => setLines(lines.filter((_, i) => i !== index))}>移除</button></td>}</tr>)}{!lines.length && <EmptyRow colSpan={readOnly ? 3 : 4} text="尚未添加材料" />}</tbody></table></div>{!readOnly && <button className="button secondary add-line" onClick={addLine} disabled={!materials.length}>添加材料</button>}</>;
+function NewBomPage({ items, refresh, onCancel, onSaved }) {
+  const makeable = useMemo(() => items.filter((item) => item.item_type !== "purchased"), [items]);
+  const materials = useMemo(() => items.filter((item) => item.item_type === "purchased"||item.item_type === "finished" ||item.item_type === "semi"), [items]);
+  const [form, setForm] = useState({ name: "", item_id: "", quantity: "1", lines: [] });
+  const [saving, setSaving] = useState(false); const [error, setError] = useState("");
+  useEffect(() => {
+    if (!form.item_id && makeable[0]) setForm((current) => ({ ...current, item_id: String(makeable[0].id) }));
+  }, [form.item_id, makeable]);
+  function addLine() {
+    if (!materials[0]) return;
+    setForm((current) => ({ ...current, lines: [...current.lines, { item_id: String(materials[0].id), qty: "1", uom: materials[0].uom }] }));
+  }
+  function updateLine(index, key, value) {
+    setForm((current) => {
+      const lines = [...current.lines];
+      const line = { ...lines[index], [key]: value };
+      if (key === "item_id") line.uom = materials.find((item) => item.id === Number(value))?.uom || line.uom;
+      lines[index] = line;
+      return { ...current, lines };
+    });
+  }
+  async function saveBom(event) {
+    event.preventDefault(); setError("");
+    if (!form.name.trim()) { setError("请输入 BOM 名称。"); return; }
+    if (!form.item_id) { setError("请选择产品 Item。"); return; }
+    if (Number(form.quantity) <= 0 || form.lines.some((line) => Number(line.qty) <= 0)) { setError("BOM 数量和材料数量必须大于 0。"); return; }
+    try {
+      setSaving(true);
+      await api.createBom({ name: form.name.trim(), item_id: Number(form.item_id), quantity: Number(form.quantity), notes: "", lines: form.lines.map((line) => ({ item_id: Number(line.item_id), qty: Number(line.qty), uom: line.uom, scrap_pct: 0, explode: false })), operations: [] });
+      await refresh();
+      onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return <section className="page-content bom-editor-page"><form onSubmit={saveBom}><section className="panel editor-card"><div className="panel-heading"><h2>基础信息</h2></div><div className="editor-body"><label>BOM 名称<input required maxLength="200" placeholder="例如：咖啡机主体装配 BOM" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><div className="form-grid"><label>产品 Item<select required value={form.item_id} onChange={(event) => setForm({ ...form, item_id: event.target.value })}><option value="">请选择产品</option>{makeable.map((item) => <option key={item.id} value={item.id}>{item.code} {item.name}</option>)}</select></label><label>BOM 数量<input required type="number" min="0.001" step="0.001" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} /></label></div></div></section>
+    <section className="panel editor-card components-editor"><div className="panel-heading"><h2>Components（材料清单）</h2><button type="button" className="button secondary" onClick={addLine} disabled={!materials.length}>添加材料</button></div><div className="table-scroll"><table><thead><tr><th>序号</th><th>Item</th><th>数量</th><th>操作</th></tr></thead><tbody>{form.lines.map((line, index) => <tr key={index}><td>{String(index + 1).padStart(3, "0")}</td><td><select value={line.item_id} onChange={(event) => updateLine(index, "item_id", event.target.value)}>{materials.map((item) => <option key={item.id} value={item.id}>{item.code} {item.name}</option>)}</select></td><td><input required type="number" min="0.001" step="0.001" value={line.qty} onChange={(event) => updateLine(index, "qty", event.target.value)} /></td><td><button type="button" className="table-action danger" onClick={() => setForm({ ...form, lines: form.lines.filter((_, lineIndex) => lineIndex !== index) })}>移除</button></td></tr>)}{!form.lines.length && <EmptyRow colSpan={4} text="尚未添加材料" />}</tbody></table></div></section>
+    {error && <div className="alert">保存失败：{error}</div>}<div className="form-actions"><button type="button" className="button secondary" onClick={onCancel}>取消</button><button className="button" type="submit" disabled={saving || !makeable.length}>{saving ? "正在保存…" : "保存 BOM"}</button></div></form></section>;
 }
+
+function BomDetailPage({ bomId, onBack }) {
+  const [detail, setDetail] = useState(null); const [error, setError] = useState(""); const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!bomId) return;
+    setLoading(true); setError("");
+    api.bom(bomId).then(setDetail).catch((err) => setError(err.message)).finally(() => setLoading(false));
+  }, [bomId]);
+  return <section className="page-content bom-detail-page"><button className="button secondary back-button" onClick={onBack}>← 返回 BOM 列表</button>
+    {loading && <section className="panel loading-panel">正在加载 BOM 详情…</section>}
+    {error && <div className="alert">无法读取 BOM 详情：{error}</div>}
+    {detail && <><section className="panel detail-card"><div className="detail-card-heading"><div><p className="eyebrow">BOM 详情</p><h2>{detail.name}</h2></div><span className="tag status-tag">{detail.status === "submitted" ? "已提交" : "草稿"}</span></div><h3>基础信息</h3><div className="info-grid"><InfoField label="BOM 编号" value={detail.bom_code} /><InfoField label="BOM 名称" value={detail.name} /><InfoField label="制造产品" value={detail.item_name} /><InfoField label="产品编号" value={detail.item_code || "—"} /><InfoField label="创建时间" value={formatDate(detail.created_at)} /><InfoField label="当前状态" value={detail.status === "submitted" ? "已提交" : "草稿"} /></div></section>
+      <section className="panel components-card"><div className="panel-heading"><h2>Components（材料清单）</h2><span>{detail.lines.length} 条记录</span></div><div className="table-scroll"><table><thead><tr><th>序号</th><th>Item 编号</th><th>Item 名称</th><th>数量</th></tr></thead><tbody>{detail.lines.map((line, index) => <tr key={line.id}><td>{String(index + 1).padStart(3, "0")}</td><td className="code">{line.item_code}</td><td>{line.item_name}</td><td>{line.qty} {line.uom}</td></tr>)}{!detail.lines.length && <EmptyRow colSpan={4} text="尚未添加材料" />}</tbody></table></div></section></>}
+  </section>;
+}
+function InfoField({ label, value }) { return <div className="info-field"><span>{label}</span><strong>{value}</strong></div>; }
 function EmptyRow({ colSpan, text = "暂无数据" }) { return <tr><td className="empty-cell" colSpan={colSpan}>{text}</td></tr>; }
