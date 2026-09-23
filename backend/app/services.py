@@ -251,10 +251,13 @@ def serialize_summary(db: Session, bom: BOM) -> dict:
     material, operation, total = bom_costs(db, bom)
     return {
         "id": bom.id,
+        "bom_code": f"BOM-{bom.id:03d}",
+        "name": bom.name or "未命名BOM",
         "item_id": bom.item_id,
         "item_code": bom.item.code,
         "item_name": bom.item.name,
         "output_qty": bom.output_qty,
+        "quantity": bom.output_qty,
         "version": bom.version,
         "status": bom.status,
         "notes": bom.notes,

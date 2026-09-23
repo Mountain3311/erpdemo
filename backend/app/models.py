@@ -27,6 +27,7 @@ class BOM(Base):
     __tablename__ = "boms"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False, default="未命名BOM", server_default="未命名BOM")
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id"))
     output_qty: Mapped[float] = mapped_column(Float, default=1.0)
     version: Mapped[int] = mapped_column(Integer, default=1)

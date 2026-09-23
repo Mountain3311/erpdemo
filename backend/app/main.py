@@ -1,13 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .database import Base, SessionLocal, engine
+from .database import Base, SessionLocal, engine, ensure_bom_name_column
 from .routers_boms import router as boms_router
 from .routers_items import router as items_router
 from .seed import seed_if_empty
 
 # 程序入口：创建数据表、配置跨域、注册 Item/BOM 路由，并在首次启动时写入示例数据。
 Base.metadata.create_all(bind=engine)
+ensure_bom_name_column()
 
 app = FastAPI(
     title="Open BOM Demo",

@@ -56,8 +56,9 @@ def create_bom(payload: BOMCreate, db: Session = Depends(get_db)):
     )
     version = (latest.version + 1) if latest else 1
     bom = BOM(
+        name=payload.name,
         item_id=item.id,
-        output_qty=payload.output_qty or 1,
+        output_qty=payload.quantity or 1,
         version=version,
         status="draft",
         notes=payload.notes or "",
@@ -114,6 +115,7 @@ def new_version(bom_id: int, db: Session = Depends(get_db)):
         .first()
     )
     clone = BOM(
+        name=source.name,
         item_id=source.item_id,
         output_qty=source.output_qty,
         version=(latest.version + 1) if latest else 1,

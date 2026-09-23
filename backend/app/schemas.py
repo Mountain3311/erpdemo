@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 # 本文件定义接口收发的 JSON 结构：路由先用它校验数据，再交给 models/services 处理。
 
@@ -36,8 +36,9 @@ class OperationIn(BaseModel):
 
 
 class BOMCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
     item_id: int
-    output_qty: float = 1
+    quantity: float = Field(default=1, validation_alias=AliasChoices("quantity", "output_qty"))
     notes: str = ""
     lines: list[LineIn] = []
     operations: list[OperationIn] = []
@@ -79,10 +80,13 @@ class OperationOut(BaseModel):
 
 class BOMSummary(BaseModel):
     id: int
+    bom_code: str
+    name: str
     item_id: int
     item_code: str
     item_name: str
     output_qty: float
+    quantity: float
     version: int
     status: str
     notes: str
