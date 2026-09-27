@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from .database import get_db
 from .models import BOM, BOMLine, BOMOperation,Item
-from .schemas import BOMCreate, BOMUpdate
+from .schemas import BOMCreate, BOMUpdate, OperationIn, OperationUpdate
 from .services import (
     assert_draft,
     bom_costs,
@@ -154,7 +154,6 @@ def bom_tree(bom_id: int, db: Session = Depends(get_db)):
     bom = load_bom(db, bom_id)
     return build_tree(db, bom, 1.0)
 
-
 @router.get("/{bom_id}/exploded")
 def bom_exploded(bom_id: int, db: Session = Depends(get_db)):
     bom = load_bom(db, bom_id)
@@ -181,3 +180,63 @@ def bom_cost(bom_id: int, db: Session = Depends(get_db)):
         "exploded": exploded,
         "operations": collect_operations(db, bom, 1.0),
     }
+
+
+# 单条工序的增删改。工序与材料行一样只在草稿上可编辑（assert_draft），提交后冻结。
+# 这里只做数据读写，工序成本一律由 services.collect_operations / bom_costs 计算，
+# 路由不参与任何成本口径的定义。
+def _find_op(bom: BOM, op_id: int) -> BOMOperation:
+    for row in bom.operations:
+        if row.id == op_id:
+            return row
+    raise HTTPException(404, "Operation not found in this BOM")
+
+
+def _assert_op_values(hours: float, rate_per_hour: float) -> None:
+    if hours < 0 or rate_per_hour < 0:
+        raise HTTPException(400, "Operation hours and rate must be >= 0")
+
+
+@router.post("/{bom_id}/operations")
+def create_operation(bom_id: int, payload: OperationIn, db: Session = Depends(get_db)):
+    bom = load_bom(db, bom_id)
+    assert_draft(bom)
+    _assert_op_values(payload.hours, payload.rate_per_hour)
+    op = BOMOperation(
+        bom_id=bom.id,
+        sequence=payload.sequence,
+        name=payload.name,
+        hours=payload.hours,
+        rate_per_hour=payload.rate_per_hour,
+    )
+    db.add(op)
+    db.commit()
+    return _detail(db, load_bom(db, bom_id))
+
+
+@router.put("/{bom_id}/operations/{op_id}")
+def update_operation(bom_id: int, op_id: int, payload: OperationUpdate, db: Session = Depends(get_db)):
+    bom = load_bom(db, bom_id)
+    assert_draft(bom)
+    op = _find_op(bom, op_id)
+    if payload.sequence is not None:
+        op.sequence = payload.sequence
+    if payload.name is not None:
+        op.name = payload.name
+    if payload.hours is not None:
+        op.hours = payload.hours
+    if payload.rate_per_hour is not None:
+        op.rate_per_hour = payload.rate_per_hour
+    _assert_op_values(op.hours, op.rate_per_hour)
+    db.commit()
+    return _detail(db, load_bom(db, bom_id))
+
+
+@router.delete("/{bom_id}/operations/{op_id}")
+def delete_operation(bom_id: int, op_id: int, db: Session = Depends(get_db)):
+    bom = load_bom(db, bom_id)
+    assert_draft(bom)
+    op = _find_op(bom, op_id)
+    db.delete(op)
+    db.commit()
+    return _detail(db, load_bom(db, bom_id))

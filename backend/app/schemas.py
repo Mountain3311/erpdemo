@@ -35,6 +35,14 @@ class OperationIn(BaseModel):
     rate_per_hour: float = 0
 
 
+class OperationUpdate(BaseModel):
+    # 单条工序的部分更新：只改传入的字段，未传的保持原值。
+    sequence: int | None = None
+    name: str | None = None
+    hours: float | None = None
+    rate_per_hour: float | None = None
+
+
 class BOMCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     item_id: int

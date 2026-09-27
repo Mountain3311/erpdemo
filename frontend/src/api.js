@@ -29,4 +29,7 @@ export const api = {
   tree: (id) => request(`/api/boms/${id}/tree`),
   exploded: (id) => request(`/api/boms/${id}/exploded`),
   cost: (id) => request(`/api/boms/${id}/cost`),
+  createOperation: (bomId, body) => request(`/api/boms/${bomId}/operations`, { method: "POST", body: JSON.stringify(body) }),
+  updateOperation: (bomId, opId, body) => request(`/api/boms/${bomId}/operations/${opId}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteOperation: (bomId, opId) => request(`/api/boms/${bomId}/operations/${opId}`, { method: "DELETE" }),
 };
